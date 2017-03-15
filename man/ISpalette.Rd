@@ -20,3 +20,4 @@ theme.
 \examples{
 plot(1:10, col = ISpalette(10), cex = 10, pch = 16)
 }
+

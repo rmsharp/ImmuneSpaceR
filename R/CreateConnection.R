@@ -266,3 +266,42 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
     
   }
 )
+
+.ISCon$methods(
+  getParticipantGroups = function(){
+    if(config$labkey.url.path != "/Studies/"){
+      stop("labkey.url.path must be /Studies/. Use CreateConnection with all studies.")
+    }
+    label_2_rowid <- labkey.selectRows(baseUrl = config$labkey.url.base,
+                                       folderPath = config$labkey.url.path,
+                                       schemaName = "study",
+                                       queryName = "ParticipantGroup",
+                                       showHidden = T)
+    
+    
+    return(label_2_rowid$Label)
+  }
+)
+
+.ISCon$methods(
+  makeParticipantFilter = function(grp_label){
+    label_2_rowid <- labkey.selectRows(baseUrl = config$labkey.url.base,
+                                       folderPath = config$labkey.url.path,
+                                       schemaName = "study",
+                                       queryName = "ParticipantGroup",
+                                       showHidden = T)
+    groupID <- label_2_rowid$`Row Id`[label_2_rowid$Label == grp_label]
+    if(length(groupID) == 0){ stop(paste0("No group found with name: ", grp_label))}
+    rowid_2_subjects <- labkey.selectRows(baseUrl = config$labkey.url.base,
+                                       folderPath = config$labkey.url.path,
+                                       schemaName = "study",
+                                       queryName = "ParticipantGroupMap",
+                                       showHidden = T)
+    subjects <- rowid_2_subjects$`Participant Id`[ which(rowid_2_subjects$`Group Id` == groupID)]
+    filter <- makeFilter(c("participant_id", "IN", paste0(subjects, collapse = ";")))
+    return(filter)
+  }
+)
+
+
+
