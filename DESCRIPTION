@@ -45,4 +45,4 @@ Collate:
     'quick_plot.R'
     'utils.R'
     'zzz.R'
-RoxygenNote: 5.0.1
+RoxygenNote: 6.0.1
