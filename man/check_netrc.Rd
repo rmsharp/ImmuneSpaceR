@@ -30,4 +30,3 @@ try(check_netrc())
 \seealso{
 CreateConnection write_netrc
 }
-

@@ -34,7 +34,8 @@ Imports:
     plotly,
     heatmaply (>= 0.7.0),
     rjson,
-    rmarkdown
+    rmarkdown,
+    dplyr
 Collate:
     'CreateConnection.R'
     'ImmuneSpace.R'

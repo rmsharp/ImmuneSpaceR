@@ -175,6 +175,7 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
 
 # Functions used in initialize need to be declared ahead of it
 #' @importFrom gtools mixedsort
+#' @import dplyr 
 .ISCon$methods(
   checkStudy=function(verbose = FALSE){
     validStudies <- mixedsort(grep("^SDY", basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), value = TRUE))
@@ -243,6 +244,7 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
   }
 )
 
+
 .ISCon$methods(
   initialize=function(..., config = NULL){
     
@@ -267,37 +269,58 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
   }
 )
 
+# Helper methods for participant filtering methods
+col_lookup <- function(iter, values, keys){
+  results <- sapply(iter, FUN = function(x){
+    res <- values[which(keys == x)]
+  })
+  return(results)
+}
+
+.ISCon$methods(
+  getLKtbl = function(schema, query){
+  df <- labkey.selectRows(baseUrl = config$labkey.url.base,
+                            folderPath = config$labkey.url.path,
+                            schemaName = schema,
+                            queryName = query,
+                            showHidden = TRUE)
+  }
+)
+
 .ISCon$methods(
   getParticipantGroups = function(){
     if(config$labkey.url.path != "/Studies/"){
       stop("labkey.url.path must be /Studies/. Use CreateConnection with all studies.")
     }
-    label_2_rowid <- labkey.selectRows(baseUrl = config$labkey.url.base,
-                                       folderPath = config$labkey.url.path,
-                                       schemaName = "study",
-                                       queryName = "ParticipantGroup",
-                                       showHidden = T)
     
+    pgrp <- con$getLKtbl(schema = "study", query = "ParticipantGroup")
+    pcat <- con$getLKtbl(schema = "study", query = "ParticipantCategory")
+    pmap <- con$getLKtbl(schema = "study", query = "ParticipantGroupMap")
+    user2grp <- con$getLKtbl(schema = "core", query = "UsersAndGroups")
     
-    return(label_2_rowid$Label)
+    result <- merge(pgrp, pcat, by.x = "Category Id", by.y = "Row Id")
+    result <- data.frame(result$`Row Id`, result$Label.x, result$Created, result$`Created By`)
+    colnames(result) <- c("Group_ID", "Label", "Date_Created", "Created_By")
+    
+    result$Created_By <- col_lookup(iter = result$Created_By,
+                                    values = user2grp$`Display Name`,
+                                      keys = user2grp$`User Id`)
+    
+    subs <- data.frame(summarize(group_by(pmap, `Group Id`), numsubs = n()))
+    
+    result$Subjects <- col_lookup(iter = result$Group_ID,
+                                  values = subs$numsubs,
+                                  keys = subs$Group.Id)
+    
+    return(result)
   }
 )
 
 .ISCon$methods(
-  makeParticipantFilter = function(grp_label){
-    label_2_rowid <- labkey.selectRows(baseUrl = config$labkey.url.base,
-                                       folderPath = config$labkey.url.path,
-                                       schemaName = "study",
-                                       queryName = "ParticipantGroup",
-                                       showHidden = T)
-    groupID <- label_2_rowid$`Row Id`[label_2_rowid$Label == grp_label]
-    if(length(groupID) == 0){ stop(paste0("No group found with name: ", grp_label))}
-    rowid_2_subjects <- labkey.selectRows(baseUrl = config$labkey.url.base,
-                                       folderPath = config$labkey.url.path,
-                                       schemaName = "study",
-                                       queryName = "ParticipantGroupMap",
-                                       showHidden = T)
-    subjects <- rowid_2_subjects$`Participant Id`[ which(rowid_2_subjects$`Group Id` == groupID)]
+  makeParticipantFilter = function(groupID){
+    pmap <- getLKtbl(schema = "study", query = "ParticipantGroupMap")
+    subjects <- pmap$`Participant Id`[ which(pmap$`Group Id` == groupID)]
+    if(length(subjects) == 0){ stop(paste0("No subjects found for group ID: ", groupID))}
     filter <- makeFilter(c("participant_id", "IN", paste0(subjects, collapse = ";")))
     return(filter)
   }

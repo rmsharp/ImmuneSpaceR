@@ -25,4 +25,3 @@ Write a netrc file that is valid for accessing ImmuneSpace
 write_netrc("immunespaceuser@gmail.com", "mypassword")
 
 }
-

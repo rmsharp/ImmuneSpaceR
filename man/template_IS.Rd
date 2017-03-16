@@ -34,4 +34,3 @@ rmarkdown::render("input.Rmd", template_IS())
 rmarkdown::render("input.Rmd", template_IS(toc = TRUE))
 }
 }
-
