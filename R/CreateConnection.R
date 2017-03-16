@@ -270,22 +270,19 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
 )
 
 # Helper methods for participant filtering methods
-col_lookup <- function(iter, values, keys){
-  results <- sapply(iter, FUN = function(x){
-    res <- values[which(keys == x)]
-  })
-  return(results)
+.col_lookup <- function(iter, values, keys){
+  results <- sapply(iter, FUN = function(x){ res <- values[which(keys == x)] })
 }
 
-.ISCon$methods(
-  getLKtbl = function(schema, query){
-  df <- labkey.selectRows(baseUrl = config$labkey.url.base,
-                            folderPath = config$labkey.url.path,
+
+.getLKtbl = function(con, schema, query){
+  df <- labkey.selectRows(baseUrl = con$config$labkey.url.base,
+                            folderPath = con$config$labkey.url.path,
                             schemaName = schema,
                             queryName = query,
                             showHidden = TRUE)
-  }
-)
+}
+
 
 .ISCon$methods(
   getParticipantGroups = function(){
@@ -293,25 +290,25 @@ col_lookup <- function(iter, values, keys){
       stop("labkey.url.path must be /Studies/. Use CreateConnection with all studies.")
     }
     
-    pgrp <- con$getLKtbl(schema = "study", query = "ParticipantGroup")
-    pcat <- con$getLKtbl(schema = "study", query = "ParticipantCategory")
-    pmap <- con$getLKtbl(schema = "study", query = "ParticipantGroupMap")
-    user2grp <- con$getLKtbl(schema = "core", query = "UsersAndGroups")
+    pgrp <- .getLKtbl(con, schema = "study", query = "ParticipantGroup")
+    pcat <- .getLKtbl(con, schema = "study", query = "ParticipantCategory")
+    pmap <- .getLKtbl(con, schema = "study", query = "ParticipantGroupMap")
+    user2grp <- .getLKtbl(con, schema = "core", query = "UsersAndGroups")
     
     result <- merge(pgrp, pcat, by.x = "Category Id", by.y = "Row Id")
     result <- data.frame(Group_ID = result$`Row Id`, 
                          Label = result$Label.x, 
                          Created = result$Created, 
-                         Created_by = result$`Created By`,
+                         Created_By = result$`Created By`,
                          stringsAsFactors = F)
     
-    result$Created_By <- col_lookup(iter = result$Created_By,
+    result$Created_By <- .col_lookup(iter = result$Created_By,
                                     values = user2grp$`Display Name`,
                                       keys = user2grp$`User Id`)
     
     subs <- data.frame(summarize(group_by(pmap, `Group Id`), numsubs = n() ))
     
-    result$Subjects <- col_lookup(iter = result$Group_ID,
+    result$Subjects <- .col_lookup(iter = result$Group_ID,
                                   values = subs$numsubs,
                                   keys = subs$Group.Id)
     
@@ -321,7 +318,7 @@ col_lookup <- function(iter, values, keys){
 
 .ISCon$methods(
   makeParticipantFilter = function(groupID){
-    pmap <- getLKtbl(schema = "study", query = "ParticipantGroupMap")
+    pmap <- .getLKtbl(con, schema = "study", query = "ParticipantGroupMap")
     subjects <- pmap$`Participant Id`[ which(pmap$`Group Id` == groupID)]
     if(length(subjects) == 0){ stop(paste0("No subjects found for group ID: ", groupID))}
     filter <- makeFilter(c("participant_id", "IN", paste0(subjects, collapse = ";")))
