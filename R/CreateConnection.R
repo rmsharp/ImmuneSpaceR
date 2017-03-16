@@ -299,8 +299,11 @@ col_lookup <- function(iter, values, keys){
     user2grp <- con$getLKtbl(schema = "core", query = "UsersAndGroups")
     
     result <- merge(pgrp, pcat, by.x = "Category Id", by.y = "Row Id")
-    result <- data.frame(result$`Row Id`, result$Label.x, result$Created, result$`Created By`)
-    colnames(result) <- c("Group_ID", "Label", "Date_Created", "Created_By")
+    result <- data.frame(Group_ID = result$`Row Id`, 
+                         Label = result$Label.x, 
+                         Created = result$Created, 
+                         Created_by = result$`Created By`,
+                         stringsAsFactors = F)
     
     result$Created_By <- col_lookup(iter = result$Created_By,
                                     values = user2grp$`Display Name`,
