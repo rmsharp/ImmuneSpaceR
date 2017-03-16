@@ -175,7 +175,7 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
 
 # Functions used in initialize need to be declared ahead of it
 #' @importFrom gtools mixedsort
-#' @import dplyr 
+#' @importFrom dplyr summarize group_by
 .ISCon$methods(
   checkStudy=function(verbose = FALSE){
     validStudies <- mixedsort(grep("^SDY", basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), value = TRUE))
@@ -306,7 +306,7 @@ col_lookup <- function(iter, values, keys){
                                     values = user2grp$`Display Name`,
                                       keys = user2grp$`User Id`)
     
-    subs <- data.frame(summarize(group_by(pmap, `Group Id`), numsubs = n()))
+    subs <- data.frame(summarize(group_by(pmap, `Group Id`), numsubs = n() ))
     
     result$Subjects <- col_lookup(iter = result$Group_ID,
                                   values = subs$numsubs,
