@@ -5,8 +5,8 @@
   old <- tolower(curlUnescape(gsub("~.*$", "", colFilter)))
   old[old == "participant_id"] <- "participant id"
   suppressWarnings({
-    labels <- tolower(colnames(labkey.selectRows(lub, lup, schema, query, view, maxRows = 0, colNameOpt = "caption")))
-    names <- colnames(labkey.selectRows(lub, lup, schema, query, view, maxRows = 0, colNameOpt = "fieldname"))
+    labels <- tolower(colnames(labkey.selectRows(lub, lup, schema, query, view, maxRows = 0, colNameOpt = cn_caption)))
+    names <- colnames(labkey.selectRows(lub, lup, schema, query, view, maxRows = 0, colNameOpt = cn_fieldname))
   })
   # Get the new names
   idx <- which(old %in% labels)
@@ -20,6 +20,7 @@ filterDT <- function(table, col, value){
   table <- table[eval(as.name(col)) == value]
   return(table)
 }
+
 filter_cached_copy <- function(filters, data){
   decoded <- curlUnescape(filters)
   cols <- gsub(".*/", "", gsub("~.*", "", decoded))
@@ -62,12 +63,12 @@ filter_cached_copy <- function(filters, data){
       } else{ # Download the data
         viewName <- NULL
         if(original_view){
-          viewName <- "full"
+          viewName <- vn_full
         }
         if(!is.null(colFilter)){
           colFilter <- .check_filter(config$labkey.url.base, 
                                      config$labkey.url.path, 
-                                     "study", x, viewName, colFilter)
+                                     sn_study, x, viewName, colFilter)
           cache <- FALSE
         } else if(length(nOpts) > 0){
           cache <- FALSE
@@ -77,10 +78,10 @@ filter_cached_copy <- function(filters, data){
         data <- data.table(
           labkey.selectRows(baseUrl = config$labkey.url.base,
                             config$labkey.url.path,
-                            schemaName = "study",
+                            schemaName = sn_study,
                             queryName = x,
                             viewName = viewName,
-                            colNameOpt = "caption",
+                            colNameOpt = cn_caption,
                             colFilter = colFilter,
                             ...))
         setnames(data, .self$.munge(colnames(data)))

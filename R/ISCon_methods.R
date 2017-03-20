@@ -1,3 +1,157 @@
+# Functions used in initialize need to be declared ahead of it
+#' @importFrom gtools mixedsort
+#' @importFrom dplyr summarize group_by
+.ISCon$methods(
+  checkStudy=function(verbose = FALSE){
+    validStudies <- mixedsort(grep("^SDY", 
+                                   basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), value = TRUE))
+    req_study <- basename(config$labkey.url.path)
+    if(!req_study %in% c("", validStudies)){
+      if(!verbose){
+        stop(paste0(req_study, " is not a valid study"))
+      } else{
+        stop(paste0(req_study, " is not a valid study\nValid studies: ",
+                    paste(validStudies, collapse=", ")))
+      }
+    }
+  }
+)
+
+.ISCon$methods(
+  getAvailableDataSets=function(){
+    if(length(available_datasets)==0){
+      df <- labkey.selectRows(baseUrl = config$labkey.url.base
+                              , config$labkey.url.path
+                              , schemaName = sn_study
+                              , queryName =  qn_ISC)
+      available_datasets <<- data.table(df)#[,list(Label,Name,Description,`Key Property Name`)]
+    }
+  }
+)
+
+.ISCon$methods(
+  GeneExpressionMatrices=function(verbose = FALSE){
+    if(!is.null(data_cache[[constants$matrices]])){
+      data_cache[[constants$matrices]]
+    }else{
+      if(verbose){
+        ge <- try(data.table(
+          labkey.selectRows(baseUrl = config$labkey.url.base,
+                            config$labkey.url.path,
+                            schemaName = sn_assayExprMx,
+                            queryName = qn_Runs,
+                            colNameOpt = cn_fieldname,
+                            showHidden = TRUE,
+                            viewName = vn_EM)),
+          silent = TRUE)
+      } else {
+        suppressWarnings(
+          ge <- try(data.table(
+            labkey.selectRows(baseUrl = config$labkey.url.base,
+                              config$labkey.url.path,
+                              schemaName = sn_assayExprMx,
+                              queryName = qn_Runs,
+                              colNameOpt = cn_fieldname,
+                              showHidden = TRUE,
+                              viewName = vn_EM)),
+            silent = TRUE)
+        )
+      }
+      if(inherits(ge, "try-error") || nrow(ge) == 0){
+        #No assay or no runs
+        message("No gene expression data")
+        data_cache[[constants$matrices]] <<- NULL
+      } else{
+        setnames(ge,.self$.munge(colnames(ge)))
+        data_cache[[constants$matrices]]<<-ge
+      }
+    }
+    return(data_cache[[constants$matrices]])
+  }
+)
+
+
+.ISCon$methods(
+  initialize=function(..., config = NULL){
+    
+    #invoke the default init routine in case it needs to be invoked 
+    #(e.g. when using $new(object) to construct the new object based on the exiting object)
+    callSuper(...)
+    
+    constants <<- list(matrices="GE_matrices", matrix_inputs="GE_inputs")
+    
+    if(!is.null(config))
+      config <<- config
+    
+    study <<- basename(config$labkey.url.path)
+    if(config$verbose){
+      checkStudy(config$verbose)
+    }
+    
+    getAvailableDataSets()
+    
+    gematrices_success <- GeneExpressionMatrices(verbose = FALSE)
+    
+  }
+)
+
+# Helper methods for participant filtering methods
+.col_lookup <- function(iter, values, keys){
+  results <- sapply(iter, FUN = function(x){ res <- values[which(keys == x)] })
+}
+
+
+.getLKtbl = function(con, schema, query){
+  df <- labkey.selectRows(baseUrl = con$config$labkey.url.base,
+                          folderPath = con$config$labkey.url.path,
+                          schemaName = schema,
+                          queryName = query,
+                          showHidden = TRUE)
+}
+
+
+.ISCon$methods(
+  getParticipantGroups = function(){
+    if(config$labkey.url.path != "/Studies/"){
+      stop("labkey.url.path must be /Studies/. Use CreateConnection with all studies.")
+    }
+    
+    pgrp <- .getLKtbl(con, schema = sn_study, query = qn_partGrp)
+    pcat <- .getLKtbl(con, schema = sn_study, query = qn_partCat)
+    pmap <- .getLKtbl(con, schema = sn_study, query = qn_partGrpMap)
+    user2grp <- .getLKtbl(con, schema = sn_core, query = qn_users)
+    
+    result <- merge(pgrp, pcat, by.x = pgrp_cat_id, by.y = pcat_row_id)
+    result <- data.frame(Group_ID = result$`Row Id`, 
+                         Label = result$Label.x, 
+                         Created = result$Created, 
+                         Created_By = result$`Created By`,
+                         stringsAsFactors = F)
+    
+    result$Created_By <- .col_lookup(iter = result$Created_By,
+                                     values = user2grp$`Display Name`,
+                                     keys = user2grp$`User Id`)
+    
+    subs <- data.frame(summarize(group_by(pmap, `Group Id`), numsubs = n() ))
+    
+    result$Subjects <- .col_lookup(iter = result$Group_ID,
+                                   values = subs$numsubs,
+                                   keys = subs$Group.Id)
+    
+    return(result)
+  }
+)
+
+.ISCon$methods(
+  makeParticipantFilter = function(groupID){
+    pmap <- .getLKtbl(con, schema = sn_study, query = qn_partGrpMap)
+    subjects <- pmap$`Participant Id`[ which(pmap$`Group Id` == groupID)]
+    if(length(subjects) == 0){ stop(paste0("No subjects found for group ID: ", groupID))}
+    filter <- makeFilter(c("participant_id", "IN", paste0(subjects, collapse = ";")))
+    return(filter)
+  }
+)
+
 .ISCon$methods(
   .munge=function(x){
     new <- tolower(gsub(" ","_",basename(x)))
@@ -22,7 +176,13 @@
     if(!is.null(data_cache[[constants$matrix_inputs]])){
       data_cache[[constants$matrix_inputs]]
     }else{
-      ge<-data.table(labkey.selectRows(baseUrl = config$labkey.url.base,config$labkey.url.path,schemaName = "assay.ExpressionMatrix.matrix",queryName = "InputSamples",colNameOpt = "fieldname",viewName = "gene_expression_matrices",showHidden=TRUE))
+      ge<-data.table(labkey.selectRows(baseUrl = config$labkey.url.base,
+                                       folderPath = config$labkey.url.path,
+                                       schemaName = sn_assayExprMx,
+                                       queryName = qn_InputSmpls,
+                                       colNameOpt = cn_fieldname,
+                                       viewName = vn_exprmxs,
+                                       showHidden=TRUE))
       setnames(ge,.self$.munge(colnames(ge)))
       data_cache[[constants$matrix_inputs]]<<-ge
     }
@@ -68,11 +228,11 @@
 .ISCon$methods(
     listGEAnalysis = function(){
       "List available gene expression analysis for the connection."
-      GEA <- data.table(labkey.selectRows(config$labkey.url.base,
-                                          config$labkey.url.path,
-                                          "gene_expression",
-                                          "gene_expression_analysis",
-                                          colNameOpt = "rname"))
+      GEA <- data.table(labkey.selectRows(baseUrl = config$labkey.url.base,
+                                          folderPath = config$labkey.url.path,
+                                          schemaName = sn_geneexpr,
+                                          queryName = qn_GEanalysis,
+                                          colNameOpt = cn_rname))
       return(GEA)
     })
 
@@ -80,8 +240,13 @@
   getGEAnalysis = function(...){
     "Downloads data from the gene expression analysis results table.\n
     '...': A list of arguments to be passed to labkey.selectRows."
-    GEAR <- data.table(labkey.selectRows(config$labkey.url.base, config$labkey.url.path,
-        "gene_expression", "DGEA_filteredGEAR",  "DGEAR", colNameOpt = "caption", ...))
+    GEAR <- data.table(labkey.selectRows(config$labkey.url.base, 
+                                         config$labkey.url.path,
+                                        schemaName = sn_geneexpr, 
+                                        queryName = qn_DGEAfilt,  
+                                        viewName = vn_DGEAR, 
+                                        colNameOpt = cn_caption, 
+                                        ...))
     setnames(GEAR, .self$.munge(colnames(GEAR)))
     return(GEAR)
   }
@@ -116,7 +281,7 @@
   getGEFiles=function(files, destdir = "."){
     "Download gene expression raw data files.\n
     files: A character. Filenames as shown on the gene_expression_files dataset.\n
-    destdir: A character. The loacal path to store the downloaded files."
+    destdir: A character. The local path to store the downloaded files."
     links <- paste0(config$labkey.url.base, "/_webdav/",
                     config$labkey.url.path,
                     "/%40files/rawdata/gene_expression/", files)

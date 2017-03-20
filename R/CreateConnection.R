@@ -66,9 +66,14 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
     nf <- try(get("labkey.netrc.file", .GlobalEnv), silent = TRUE)
   }
   if(!inherits(nf, "try-error") && !is.null(nf)){
-    curlOptions <- labkey.setCurlOptions(ssl.verifyhost = 2, sslversion = 1, netrc.file = nf, useragent = paste("ImmuneSpaceR", packageVersion("ImmuneSpaceR")))
+    curlOptions <- labkey.setCurlOptions(ssl.verifyhost = 2, 
+                                         sslversion = 1, 
+                                         netrc.file = nf, 
+                                         useragent = paste("ImmuneSpaceR", packageVersion("ImmuneSpaceR")))
   } else{
-    curlOptions <- labkey.setCurlOptions(ssl.verifyhost = 2, sslversion = 1, useragent = paste("ImmuneSpaceR", packageVersion("ImmuneSpaceR")))
+    curlOptions <- labkey.setCurlOptions(ssl.verifyhost = 2, 
+                                         sslversion = 1, 
+                                         useragent = paste("ImmuneSpaceR", packageVersion("ImmuneSpaceR")))
   }
   
   if(length(study) <= 1){
@@ -77,8 +82,7 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
                       , labkey.user.email = labkey.user.email
                       , use.data.frame = use.data.frame
                       , verbose = verbose
-                      , curlOptions = curlOptions
-                      )
+                      , curlOptions = curlOptions)
   } else{
     stop("For multiple studies, use an empty string and filter the connection.")
   }
@@ -92,7 +96,9 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
                              , curlOptions
                              , verbose
                              , ...){
-  labkey.url.path<-try(get("labkey.url.path",.GlobalEnv),silent=TRUE)
+  
+  labkey.url.path <- try(get("labkey.url.path",.GlobalEnv), silent=TRUE)
+  
   if(inherits(labkey.url.path,"try-error")){
     if(is.null(study)){
       stop("study cannot be NULL")
@@ -178,7 +184,8 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
 #' @importFrom dplyr summarize group_by
 .ISCon$methods(
   checkStudy=function(verbose = FALSE){
-    validStudies <- mixedsort(grep("^SDY", basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), value = TRUE))
+    validStudies <- mixedsort(grep("^SDY", 
+                                   basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), value = TRUE))
     req_study <- basename(config$labkey.url.path)
     if(!req_study %in% c("", validStudies)){
       if(!verbose){
@@ -196,8 +203,8 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
     if(length(available_datasets)==0){
       df <- labkey.selectRows(baseUrl = config$labkey.url.base
                         , config$labkey.url.path
-                        , schemaName = "study"
-                        , queryName = "ISC_study_datasets")
+                        , schemaName = sn_study
+                        , queryName =  qn_ISC)
       available_datasets <<- data.table(df)#[,list(Label,Name,Description,`Key Property Name`)]
     }
   }
@@ -212,22 +219,22 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
         ge <- try(data.table(
           labkey.selectRows(baseUrl = config$labkey.url.base,
                             config$labkey.url.path,
-                            schemaName = "assay.ExpressionMatrix.matrix",
-                            queryName = "Runs",
-                            colNameOpt = "fieldname",
+                            schemaName = sn_assayExprMx,
+                            queryName = qn_Runs,
+                            colNameOpt = cn_fieldname,
                             showHidden = TRUE,
-                            viewName = "expression_matrices")),
+                            viewName = vn_EM)),
         silent = TRUE)
       } else {
         suppressWarnings(
           ge <- try(data.table(
             labkey.selectRows(baseUrl = config$labkey.url.base,
                               config$labkey.url.path,
-                              schemaName = "assay.ExpressionMatrix.matrix",
-                              queryName = "Runs",
-                              colNameOpt = "fieldname",
+                              schemaName = sn_assayExprMx,
+                              queryName = qn_Runs,
+                              colNameOpt = cn_fieldname,
                               showHidden = TRUE,
-                              viewName = "expression_matrices")),
+                              viewName = vn_EM)),
           silent = TRUE)
         )
       }
@@ -252,7 +259,7 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
     #(e.g. when using $new(object) to construct the new object based on the exiting object)
     callSuper(...)
     
-    constants <<- list(matrices="GE_matrices",matrix_inputs="GE_inputs")
+    constants <<- list(matrices="GE_matrices", matrix_inputs="GE_inputs")
     
     if(!is.null(config))
       config <<- config
@@ -290,12 +297,12 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
       stop("labkey.url.path must be /Studies/. Use CreateConnection with all studies.")
     }
     
-    pgrp <- .getLKtbl(con, schema = "study", query = "ParticipantGroup")
-    pcat <- .getLKtbl(con, schema = "study", query = "ParticipantCategory")
-    pmap <- .getLKtbl(con, schema = "study", query = "ParticipantGroupMap")
-    user2grp <- .getLKtbl(con, schema = "core", query = "UsersAndGroups")
+    pgrp <- .getLKtbl(con, schema = sn_study, query = qn_partGrp)
+    pcat <- .getLKtbl(con, schema = sn_study, query = qn_partCat)
+    pmap <- .getLKtbl(con, schema = sn_study, query = qn_partGrpMap)
+    user2grp <- .getLKtbl(con, schema = sn_core, query = qn_users)
     
-    result <- merge(pgrp, pcat, by.x = "Category Id", by.y = "Row Id")
+    result <- merge(pgrp, pcat, by.x = pgrp_cat_id, by.y = pcat_row_id)
     result <- data.frame(Group_ID = result$`Row Id`, 
                          Label = result$Label.x, 
                          Created = result$Created, 
@@ -318,7 +325,7 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
 
 .ISCon$methods(
   makeParticipantFilter = function(groupID){
-    pmap <- .getLKtbl(con, schema = "study", query = "ParticipantGroupMap")
+    pmap <- .getLKtbl(con, schema = sn_study, query = qn_partGrpMap)
     subjects <- pmap$`Participant Id`[ which(pmap$`Group Id` == groupID)]
     if(length(subjects) == 0){ stop(paste0("No subjects found for group ID: ", groupID))}
     filter <- makeFilter(c("participant_id", "IN", paste0(subjects, collapse = ";")))

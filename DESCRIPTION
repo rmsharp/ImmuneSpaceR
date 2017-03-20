@@ -36,10 +36,11 @@ Imports:
     rjson,
     rmarkdown,
     dplyr
-Collate:
+Collate: 
     'CreateConnection.R'
     'ImmuneSpace.R'
     'ImmuneSpaceR.R'
+    'Schema_variables.R'
     'getDataset.R'
     'getGEMatrix.R'
     'netrc.R'

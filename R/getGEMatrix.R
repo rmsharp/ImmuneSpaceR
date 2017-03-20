@@ -63,9 +63,9 @@ NULL
                                             annotation_set_id);
         features <- labkey.executeSql(config$labkey.url.base, 
                                       config$labkey.url.path,
-                                      schemaName = "Microarray",
+                                      schemaName = sn_microarray,
                                       sql = featureAnnotationSetQuery,
-                                      colNameOpt = "fieldname")
+                                      colNameOpt = cn_fieldname)
         setnames(features, "GeneSymbol", "gene_symbol")
       }else{
         features <- data.frame(FeatureId=data_cache[[cache_name]][,gene_symbol],
@@ -86,14 +86,15 @@ NULL
     features <- data_cache[[.self$.mungeFeatureId(.self$.getFeatureId(matrix_name))]][,c("FeatureId","gene_symbol")]
     
     runID <- data_cache$GE_matrices[name == matrix_name, rowid]
-    pheno_filter <- makeFilter(c("Run", "EQUAL", runID), 
-                               c("Biosample/biosample_accession", "IN", paste(colnames(matrix), collapse = ";")))
+    pheno_filter <- makeFilter(c(pf_run, "EQUAL", runID), 
+                               c(pf_bsacc, "IN", paste(colnames(matrix), collapse = ";")))
     pheno <- unique(data.table(labkey.selectRows(
-      config$labkey.url.base, config$labkey.url.path,
-      #"assay.ExpressionMatrix.matrix", "InputSamples", "gene_expression_matrices",
-      "study", "HM_InputSamplesQuerySnapshot",
-      containerFilter = "CurrentAndSubfolders",
-      colNameOpt = "caption", colFilter = pheno_filter)))
+      baseUrl = config$labkey.url.base, 
+      folderPath = config$labkey.url.path,
+      schemaName = sn_study, 
+      queryName = qn_InputSmplsShot,
+      containerFilter = cf_currandsubs,
+      colNameOpt = cn_caption, colFilter = pheno_filter)))
     
     setnames(pheno, .self$.munge(colnames(pheno)))
 
@@ -102,7 +103,9 @@ NULL
                           study_time_collected, study_time_collected_unit)]
     
     if(summary){
-      fdata <- data.frame(FeatureId = matrix$gene_symbol, gene_symbol = matrix$gene_symbol, row.names = matrix$gene_symbol)
+      fdata <- data.frame(FeatureId = matrix$gene_symbol, 
+                          gene_symbol = matrix$gene_symbol, 
+                          row.names = matrix$gene_symbol)
       rownames(fdata) <- fdata$FeatureId
       fdata <- AnnotatedDataFrame(fdata)
     } else{
@@ -214,23 +217,36 @@ NULL
     if(is.null(x) | !x %in% names(data_cache)){
       stop(paste(x, "is not a valid expression matrix."))
     } 
-    bsFilter <- makeFilter(c("biosample_accession", "IN",
+    bsFilter <- makeFilter(c(bf_acc, "IN",
                              paste(pData(data_cache[[x]])$biosample_accession, collapse = ";")))
-    bs2es <- data.table(labkey.selectRows(config$labkey.url.base, config$labkey.url.path,
-                                          "immport", "expsample_2_biosample",
-                                          colFilter = bsFilter, colNameOpt = "rname"))
-    esFilter <- makeFilter(c("expsample_accession", "IN",
+    bs2es <- data.table(labkey.selectRows(config$labkey.url.base, 
+                                          config$labkey.url.path,
+                                          schemaName = sn_Immport, 
+                                          queryName = qn_exp2bs,
+                                          colFilter = bsFilter, 
+                                          colNameOpt = "rname"))
+    
+    esFilter <- makeFilter(c(ef_acc, "IN",
                              paste(bs2es$expsample_accession, collapse = ";")))
-    es2trt <- data.table(labkey.selectRows(config$labkey.url.base, config$labkey.url.path,
-                                           "immport", "expsample_2_treatment",
-                                           colFilter = esFilter, colNameOpt = "rname"))
-    trtFilter <- makeFilter(c("treatment_accession", "IN",
+    es2trt <- data.table(labkey.selectRows(config$labkey.url.base, 
+                                           config$labkey.url.path,
+                                           schemaName = sn_Immport, 
+                                           queryName = qn_exp2trt,
+                                           colFilter = esFilter, 
+                                           colNameOpt = "rname"))
+    
+    trtFilter <- makeFilter(c(tf_acc, "IN",
                               paste(es2trt$treatment_accession, collapse = ";")))
-    trt <- data.table(labkey.selectRows(config$labkey.url.base, config$labkey.url.path,
-                                        "immport", "treatment",
-                                        colFilter = trtFilter, colNameOpt = "rname"))
-    bs2trt <- merge(bs2es, es2trt, by = "expsample_accession")
-    bs2trt <- merge(bs2trt, trt, by = "treatment_accession")
+    trt <- data.table(labkey.selectRows(config$labkey.url.base, 
+                                        config$labkey.url.path,
+                                        schemaName = sn_Immport, 
+                                        queryName = qn_treatment,
+                                        colFilter = trtFilter, 
+                                        colNameOpt = "rname"))
+    
+    bs2trt <- merge(bs2es, es2trt, by = ef_acc)
+    bs2trt <- merge(bs2trt, trt, by = tf_acc)
+    
     pData(data_cache[[x]])$treatment <<- bs2trt[match(pData(data_cache[[x]])$biosample_accession, biosample_accession), name]
     return(data_cache[[x]])
   }
@@ -266,12 +282,14 @@ NULL
     pd <- data.table(pData(EM))
     colType <- gsub("_.*$", "", tolower(colType))
     if(colType == "expsample"){
-      bsFilter <- makeFilter(c("biosample_accession", "IN",
+      bsFilter <- makeFilter(c(bf_acc, "IN",
                                  paste(pd$biosample_accession, collapse = ";")))
-      bs2es <- data.table(labkey.selectRows(config$labkey.url.base, config$labkey.url.path,
-                                              "immport", "expsample_2_biosample",
+      bs2es <- data.table(labkey.selectRows(config$labkey.url.base, 
+                                            config$labkey.url.path,
+                                            schemaName = sn_Immport,
+                                            queryName = qn_exp2bs,
                                               colFilter = bsFilter, colNameOpt = "rname"))
-      pd <- merge(pd, bs2es[, list(biosample_accession, expsample_accession)], by = "biosample_accession")
+      pd <- merge(pd, bs2es[, list(biosample_accession, expsample_accession)], by = bf_acc)
       es <- pd[match(sampleNames(EM), pd$biosample_accession), expsample_accession]
       sampleNames(EM) <- pData(EM)$expsample_accession <- es
     } else if(colType %in% c("participant", "subject")){
