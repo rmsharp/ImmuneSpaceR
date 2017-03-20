@@ -51,7 +51,7 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
   if(inherits(labkey.user.email, "try-error"))
     labkey.user.email <- "unknown_user at not_a_domain.com"
   
-  # set curoption for Rlabkey package
+  # set curloption for Rlabkey package
   #
   # Rlabkey stores the Curl options in its package environment through labkey.setCurlOptions call.
   # So in theory we need to reset it prior to each Rlabkey query 
@@ -103,9 +103,9 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
     if(is.null(study)){
       stop("study cannot be NULL")
     }
-    labkey.url.path <- paste0("/Studies/",study)
+    labkey.url.path <- paste0("/Studies/", study)
   }else if(!is.null(study)){
-    labkey.url.path <- file.path(dirname(labkey.url.path),study)
+    labkey.url.path <- file.path(dirname(labkey.url.path), study)
   }
   if(!is(use.data.frame, "logical")){
     warning("use.data.frame should be of class `logical`. Setting it to FALSE.")
@@ -179,159 +179,7 @@ CreateConnection = function(study = NULL, login = NULL, password = NULL, use.dat
                           data_cache = "list", constants = "list")
 )
 
-# Functions used in initialize need to be declared ahead of it
-#' @importFrom gtools mixedsort
-#' @importFrom dplyr summarize group_by
-.ISCon$methods(
-  checkStudy=function(verbose = FALSE){
-    validStudies <- mixedsort(grep("^SDY", 
-                                   basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), value = TRUE))
-    req_study <- basename(config$labkey.url.path)
-    if(!req_study %in% c("", validStudies)){
-      if(!verbose){
-        stop(paste0(req_study, " is not a valid study"))
-      } else{
-        stop(paste0(req_study, " is not a valid study\nValid studies: ",
-                    paste(validStudies, collapse=", ")))
-      }
-    }
-  }
-)
 
-.ISCon$methods(
-  getAvailableDataSets=function(){
-    if(length(available_datasets)==0){
-      df <- labkey.selectRows(baseUrl = config$labkey.url.base
-                        , config$labkey.url.path
-                        , schemaName = sn_study
-                        , queryName =  qn_ISC)
-      available_datasets <<- data.table(df)#[,list(Label,Name,Description,`Key Property Name`)]
-    }
-  }
-)
-
-.ISCon$methods(
-  GeneExpressionMatrices=function(verbose = FALSE){
-    if(!is.null(data_cache[[constants$matrices]])){
-      data_cache[[constants$matrices]]
-    }else{
-      if(verbose){
-        ge <- try(data.table(
-          labkey.selectRows(baseUrl = config$labkey.url.base,
-                            config$labkey.url.path,
-                            schemaName = sn_assayExprMx,
-                            queryName = qn_Runs,
-                            colNameOpt = cn_fieldname,
-                            showHidden = TRUE,
-                            viewName = vn_EM)),
-        silent = TRUE)
-      } else {
-        suppressWarnings(
-          ge <- try(data.table(
-            labkey.selectRows(baseUrl = config$labkey.url.base,
-                              config$labkey.url.path,
-                              schemaName = sn_assayExprMx,
-                              queryName = qn_Runs,
-                              colNameOpt = cn_fieldname,
-                              showHidden = TRUE,
-                              viewName = vn_EM)),
-          silent = TRUE)
-        )
-      }
-      if(inherits(ge, "try-error") || nrow(ge) == 0){
-        #No assay or no runs
-        message("No gene expression data")
-        data_cache[[constants$matrices]] <<- NULL
-      } else{
-        setnames(ge,.self$.munge(colnames(ge)))
-        data_cache[[constants$matrices]]<<-ge
-      }
-    }
-    return(data_cache[[constants$matrices]])
-  }
-)
-
-
-.ISCon$methods(
-  initialize=function(..., config = NULL){
-    
-    #invoke the default init routine in case it needs to be invoked 
-    #(e.g. when using $new(object) to construct the new object based on the exiting object)
-    callSuper(...)
-    
-    constants <<- list(matrices="GE_matrices", matrix_inputs="GE_inputs")
-    
-    if(!is.null(config))
-      config <<- config
-
-    study <<- basename(config$labkey.url.path)
-    if(config$verbose){
-      checkStudy(config$verbose)
-    }
-    
-    getAvailableDataSets()
-
-    gematrices_success <- GeneExpressionMatrices(verbose = FALSE)
-    
-  }
-)
-
-# Helper methods for participant filtering methods
-.col_lookup <- function(iter, values, keys){
-  results <- sapply(iter, FUN = function(x){ res <- values[which(keys == x)] })
-}
-
-
-.getLKtbl = function(con, schema, query){
-  df <- labkey.selectRows(baseUrl = con$config$labkey.url.base,
-                            folderPath = con$config$labkey.url.path,
-                            schemaName = schema,
-                            queryName = query,
-                            showHidden = TRUE)
-}
-
-
-.ISCon$methods(
-  getParticipantGroups = function(){
-    if(config$labkey.url.path != "/Studies/"){
-      stop("labkey.url.path must be /Studies/. Use CreateConnection with all studies.")
-    }
-    
-    pgrp <- .getLKtbl(con, schema = sn_study, query = qn_partGrp)
-    pcat <- .getLKtbl(con, schema = sn_study, query = qn_partCat)
-    pmap <- .getLKtbl(con, schema = sn_study, query = qn_partGrpMap)
-    user2grp <- .getLKtbl(con, schema = sn_core, query = qn_users)
-    
-    result <- merge(pgrp, pcat, by.x = pgrp_cat_id, by.y = pcat_row_id)
-    result <- data.frame(Group_ID = result$`Row Id`, 
-                         Label = result$Label.x, 
-                         Created = result$Created, 
-                         Created_By = result$`Created By`,
-                         stringsAsFactors = F)
-    
-    result$Created_By <- .col_lookup(iter = result$Created_By,
-                                    values = user2grp$`Display Name`,
-                                      keys = user2grp$`User Id`)
-    
-    subs <- data.frame(summarize(group_by(pmap, `Group Id`), numsubs = n() ))
-    
-    result$Subjects <- .col_lookup(iter = result$Group_ID,
-                                  values = subs$numsubs,
-                                  keys = subs$Group.Id)
-    
-    return(result)
-  }
-)
-
-.ISCon$methods(
-  makeParticipantFilter = function(groupID){
-    pmap <- .getLKtbl(con, schema = sn_study, query = qn_partGrpMap)
-    subjects <- pmap$`Participant Id`[ which(pmap$`Group Id` == groupID)]
-    if(length(subjects) == 0){ stop(paste0("No subjects found for group ID: ", groupID))}
-    filter <- makeFilter(c("participant_id", "IN", paste0(subjects, collapse = ";")))
-    return(filter)
-  }
-)
 
 
 

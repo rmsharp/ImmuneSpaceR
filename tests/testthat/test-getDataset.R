@@ -56,9 +56,9 @@ test_that("get_neut_ab_titer", {
   test_dataset(sdy180, "neut_ab_titer", common_cols, specif_cols = nabCols)
 })
 
-test_that("fcs_analyzed_result", {
- test_dataset(sdy269, "fcs_analyzed_result", common_cols, specif_cols = farCols)
-})
+# test_that("fcs_analyzed_result", {
+#  test_dataset(sdy269, "fcs_analyzed_result", common_cols, specif_cols = farCols)
+# })
 
 #test_that("get_fcs_sample_files", {
 #  test_dataset(sdy180, "fcs_sample_files", common_cols, specif_cols = fcsCols)

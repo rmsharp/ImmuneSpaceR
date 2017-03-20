@@ -19,13 +19,6 @@ test_EM <- function(EM){
 
 context("getGEMatrix")
 
-test_that("gets correct mats$name for SDY269", {
-  con <- CreateConnection("SDY269", verbose = TRUE)
-  expect_true(!is.null(con$config$labkey.url.base))
-  mats <- con$GeneExpressionMatrices()
-  expect_true(all(c("LAIV_2008","TIV_2008") %in% mats$name))
-})
-
 test_that("gets TIV_2008 eSet non-summary", {
   EM <- sdy$getGEMatrix("TIV_2008", summary = F)
   test_EM(EM)

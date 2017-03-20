@@ -2,6 +2,12 @@
 #  Global variables
 #
 
+# Environment ------------------------------------------------
+TEST <- "https://test.immunespace.org"
+PROD <- "https://www.immunespace.org"
+labkey.url.base <- PROD
+
+
 #------DATASET-COLUMN-NAMES------------------------------------
 demo <- c("age_reported", "gender", "race")
 idCols <- c("participant_id")

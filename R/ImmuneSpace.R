@@ -24,7 +24,7 @@
                               , config$labkey.url.path
                               , schemaName = sn_study
                               , queryName =  qn_ISC)
-      available_datasets <<- data.table(df)#[,list(Label,Name,Description,`Key Property Name`)]
+      available_datasets <<- data.table(df) #[,list(Label,Name,Description,`Key Property Name`)]
     }
   }
 )
@@ -189,12 +189,12 @@
   }
 )
 
-
 .ISCon$methods(
   .isRunningLocally=function(path){
     file.exists(path)
   }
 )
+
 .ISCon$methods(
   .localStudyPath=function(urlpath){
     LOCALPATH <- "/share/files/"
