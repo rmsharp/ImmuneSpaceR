@@ -1,8 +1,53 @@
-# Functions used in initialize need to be declared ahead of it
+########################################################################
+# --------------------  HELPER METHODS  -------------------------------#
+#        must be declared  before the functions they help              #
+########################################################################
+
+.ISCon$methods(
+  .munge=function(x){
+    new <- tolower(gsub(" ","_",basename(x)))
+    idx <- which(duplicated(new) | duplicated(new, fromLast = TRUE))
+    if(length(idx)>0)
+      new[idx] <- .munge(gsub("(.*)/.*$", "\\1", x[idx]))
+    return(new)
+  }
+)
+
+# Returns TRUE if the connection is at project level ("/Studies")
+.ISCon$methods(
+  .isProject=function()
+    if(config$labkey.url.path == "/Studies/"){
+      TRUE
+    } else{
+      FALSE
+    }
+)
+
+
+.ISCon$methods(
+  .isRunningLocally=function(path){
+    file.exists(path)
+  }
+)
+
+
+.ISCon$methods(
+  .localStudyPath=function(urlpath){
+    LOCALPATH <- "/share/files/"
+    PRODUCTION_HOST <- "www.immunespace.org"
+    TEST_HOST <- "test.immunespace.org"
+    gsub(file.path(gsub("/$","",config$labkey.url.base), "_webdav"), file.path(LOCALPATH), urlpath)
+  }
+)
+
+#################################################################################
+# -----------------------  INITIALIZE METHODS ----------------------------------#
+#################################################################################
+
 #' @importFrom gtools mixedsort
 #' @importFrom dplyr summarize group_by
 .ISCon$methods(
-  checkStudy=function(verbose = FALSE){
+  checkStudy = function(verbose = FALSE){
     validStudies <- mixedsort(grep("^SDY", 
                                    basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), value = TRUE))
     req_study <- basename(config$labkey.url.path)
@@ -18,7 +63,7 @@
 )
 
 .ISCon$methods(
-  getAvailableDataSets=function(){
+  getAvailableDataSets = function(){
     if(length(available_datasets)==0){
       df <- labkey.selectRows(baseUrl = config$labkey.url.base
                               , config$labkey.url.path
@@ -29,8 +74,128 @@
   }
 )
 
+
 .ISCon$methods(
-  GeneExpressionMatrices=function(verbose = FALSE){
+  initialize=function(..., config = NULL){
+    
+    #invoke the default init routine in case it needs to be invoked 
+    #(e.g. when using $new(object) to construct the new object based on the exiting object)
+    callSuper(...)
+    
+    constants <<- list(matrices="GE_matrices", matrix_inputs="GE_inputs")
+    
+    if(!is.null(config))
+      config <<- config
+    
+    study <<- basename(config$labkey.url.path)
+    if(config$verbose){
+      checkStudy(config$verbose)
+    }
+    
+    getAvailableDataSets()
+    
+    gematrices_success <- GeneExpressionMatrices(verbose = FALSE)
+    
+  }
+)
+
+
+#################################################################################
+# -----------------------  LIST DATA METHODS -----------------------------------#
+#################################################################################
+
+.ISCon$methods(
+  listDatasets=function(which = c("datasets", "expression")){
+    "List the datasets available in the study or studies of the connection."
+    
+    if("datasets" %in% which){
+      cat("datasets\n")
+      for(i in 1:nrow(available_datasets)){
+        cat(sprintf("\t%s\n",available_datasets[i,Name]))
+      }
+    }
+    if("expression" %in% which){
+      if(!is.null(data_cache[[constants$matrices]])){
+        cat("Expression Matrices\n")
+        for(i in 1:nrow(data_cache[[constants$matrices]])){
+          cat(sprintf("\t%s\n",data_cache[[constants$matrices]][i, name]))
+        }
+      }
+    }
+  }
+)
+
+#################################################################################
+# -----------------  GENE EXPRESSION METHODS -----------------------------------#
+#################################################################################
+
+.ISCon$methods(
+  getGEFiles=function(files, destdir = "."){
+    "Download gene expression raw data files.\n
+    files: A character. Filenames as shown on the gene_expression_files dataset.\n
+    destdir: A character. The local path to store the downloaded files."
+    links <- paste0(config$labkey.url.base, "/_webdav/",
+                    config$labkey.url.path,
+                    "/%40files/rawdata/gene_expression/", files)
+    sapply(links, function(x){
+      download.file(url = links[1], destfile = file.path(destdir, basename(x)),
+                    method = "curl", extra = "-n")
+    })
+  }
+)
+
+
+.ISCon$methods(
+  listGEAnalysis = function(){
+    "List available gene expression analysis for the connection."
+    GEA <- data.table(labkey.selectRows(baseUrl = config$labkey.url.base,
+                                        folderPath = config$labkey.url.path,
+                                        schemaName = sn_geneexpr,
+                                        queryName = qn_GEanalysis,
+                                        colNameOpt = cn_rname))
+    return(GEA)
+  }
+)
+
+
+.ISCon$methods(
+  getGEAnalysis = function(...){
+    "Downloads data from the gene expression analysis results table.\n
+    '...': A list of arguments to be passed to labkey.selectRows."
+    GEAR <- data.table(labkey.selectRows(config$labkey.url.base, 
+                                         config$labkey.url.path,
+                                         schemaName = sn_geneexpr, 
+                                         queryName = qn_DGEAfilt,  
+                                         viewName = vn_DGEAR, 
+                                         colNameOpt = cn_caption, 
+                                         ...))
+    setnames(GEAR, .self$.munge(colnames(GEAR)))
+    return(GEAR)
+  }
+)
+
+
+.ISCon$methods(
+  GeneExpressionInputs = function(){
+    if(!is.null(data_cache[[constants$matrix_inputs]])){
+      data_cache[[constants$matrix_inputs]]
+    }else{
+      ge <- data.table(labkey.selectRows(baseUrl = config$labkey.url.base,
+                                       folderPath = config$labkey.url.path,
+                                       schemaName = sn_assayExprMx,
+                                       queryName = qn_InputSmpls,
+                                       colNameOpt = cn_fieldname,
+                                       viewName = vn_exprmxs,
+                                       showHidden=TRUE))
+      setnames(ge,.self$.munge(colnames(ge)))
+      data_cache[[constants$matrix_inputs]] <<- ge
+    }
+  }
+)
+
+
+.ISCon$methods(
+  GeneExpressionMatrices = function(verbose = FALSE){
     if(!is.null(data_cache[[constants$matrices]])){
       data_cache[[constants$matrices]]
     }else{
@@ -71,37 +236,16 @@
 )
 
 
-.ISCon$methods(
-  initialize=function(..., config = NULL){
-    
-    #invoke the default init routine in case it needs to be invoked 
-    #(e.g. when using $new(object) to construct the new object based on the exiting object)
-    callSuper(...)
-    
-    constants <<- list(matrices="GE_matrices", matrix_inputs="GE_inputs")
-    
-    if(!is.null(config))
-      config <<- config
-    
-    study <<- basename(config$labkey.url.path)
-    if(config$verbose){
-      checkStudy(config$verbose)
-    }
-    
-    getAvailableDataSets()
-    
-    gematrices_success <- GeneExpressionMatrices(verbose = FALSE)
-    
-  }
-)
+###############################################################################
+# -------------- PARTICIPANT FILTERING METHODS -------------------------------#
+###############################################################################
 
-# Helper methods for participant filtering methods
 .col_lookup <- function(iter, values, keys){
   results <- sapply(iter, FUN = function(x){ res <- values[which(keys == x)] })
 }
 
 
-.getLKtbl = function(con, schema, query){
+.getLKtbl <- function(con, schema, query){
   df <- labkey.selectRows(baseUrl = con$config$labkey.url.base,
                           folderPath = con$config$labkey.url.path,
                           schemaName = schema,
@@ -111,7 +255,7 @@
 
 
 .ISCon$methods(
-  getParticipantGroups = function(){
+  listParticipantGroups = function(){
     if(config$labkey.url.path != "/Studies/"){
       stop("labkey.url.path must be /Studies/. Use CreateConnection with all studies.")
     }
@@ -142,6 +286,7 @@
   }
 )
 
+
 .ISCon$methods(
   makeParticipantFilter = function(groupID){
     pmap <- .getLKtbl(con, schema = sn_study, query = qn_partGrpMap)
@@ -152,105 +297,10 @@
   }
 )
 
-.ISCon$methods(
-  .munge=function(x){
-    new <- tolower(gsub(" ","_",basename(x)))
-    idx <- which(duplicated(new) | duplicated(new, fromLast = TRUE))
-    if(length(idx)>0)
-      new[idx] <- .munge(gsub("(.*)/.*$", "\\1", x[idx]))
-    return(new)
-  }
-)
 
-# Returns TRUE if the connection is at project level ("/Studies")
-.ISCon$methods(
-  .isProject=function()
-    if(config$labkey.url.path == "/Studies/"){
-      TRUE
-    } else{
-      FALSE
-    }
-)
-.ISCon$methods(
-  GeneExpressionInputs=function(){
-    if(!is.null(data_cache[[constants$matrix_inputs]])){
-      data_cache[[constants$matrix_inputs]]
-    }else{
-      ge<-data.table(labkey.selectRows(baseUrl = config$labkey.url.base,
-                                       folderPath = config$labkey.url.path,
-                                       schemaName = sn_assayExprMx,
-                                       queryName = qn_InputSmpls,
-                                       colNameOpt = cn_fieldname,
-                                       viewName = vn_exprmxs,
-                                       showHidden=TRUE))
-      setnames(ge,.self$.munge(colnames(ge)))
-      data_cache[[constants$matrix_inputs]]<<-ge
-    }
-  }
-)
-
-.ISCon$methods(
-  .isRunningLocally=function(path){
-    file.exists(path)
-  }
-)
-
-.ISCon$methods(
-  .localStudyPath=function(urlpath){
-    LOCALPATH <- "/share/files/"
-    PRODUCTION_HOST <- "www.immunespace.org"
-    TEST_HOST <- "test.immunespace.org"
-    gsub(file.path(gsub("/$","",config$labkey.url.base), "_webdav"), file.path(LOCALPATH), urlpath)
-  }
-)
-
-.ISCon$methods(
-    listDatasets=function(which = c("datasets", "expression")){
-      "List the datasets available in the study or studies of the connection."
-      
-      if("datasets" %in% which){
-        cat("datasets\n")
-        for(i in 1:nrow(available_datasets)){
-          cat(sprintf("\t%s\n",available_datasets[i,Name]))
-        }
-      }
-      if("expression" %in% which){
-        if(!is.null(data_cache[[constants$matrices]])){
-          cat("Expression Matrices\n")
-          for(i in 1:nrow(data_cache[[constants$matrices]])){
-            cat(sprintf("\t%s\n",data_cache[[constants$matrices]][i, name]))
-          }
-        }
-      }
-    })
-
-
-.ISCon$methods(
-    listGEAnalysis = function(){
-      "List available gene expression analysis for the connection."
-      GEA <- data.table(labkey.selectRows(baseUrl = config$labkey.url.base,
-                                          folderPath = config$labkey.url.path,
-                                          schemaName = sn_geneexpr,
-                                          queryName = qn_GEanalysis,
-                                          colNameOpt = cn_rname))
-      return(GEA)
-    })
-
-.ISCon$methods(
-  getGEAnalysis = function(...){
-    "Downloads data from the gene expression analysis results table.\n
-    '...': A list of arguments to be passed to labkey.selectRows."
-    GEAR <- data.table(labkey.selectRows(config$labkey.url.base, 
-                                         config$labkey.url.path,
-                                        schemaName = sn_geneexpr, 
-                                        queryName = qn_DGEAfilt,  
-                                        viewName = vn_DGEAR, 
-                                        colNameOpt = cn_caption, 
-                                        ...))
-    setnames(GEAR, .self$.munge(colnames(GEAR)))
-    return(GEAR)
-  }
-)
+###############################################################################
+# ----------------  HOUSEKEEPING FUNCTIONS -----------------------------------#
+###############################################################################
 
 .ISCon$methods(
   clear_cache = function(){
@@ -258,8 +308,9 @@
     data_cache[grep("^GE", names(data_cache), invert = TRUE)] <<- NULL
   }
 )
+
 .ISCon$methods(
-    show=function(){
+    show = function(){
     "Display information about the object."
       cat(sprintf("Immunespace Connection to study %s\n",study))
       cat(sprintf("URL: %s\n",file.path(gsub("/$","",config$labkey.url.base),gsub("^/","",config$labkey.url.path))))
@@ -277,20 +328,6 @@
     }
 )
 
-.ISCon$methods(
-  getGEFiles=function(files, destdir = "."){
-    "Download gene expression raw data files.\n
-    files: A character. Filenames as shown on the gene_expression_files dataset.\n
-    destdir: A character. The local path to store the downloaded files."
-    links <- paste0(config$labkey.url.base, "/_webdav/",
-                    config$labkey.url.path,
-                    "/%40files/rawdata/gene_expression/", files)
-    sapply(links, function(x){
-      download.file(url = links[1], destfile = file.path(destdir, basename(x)),
-                    method = "curl", extra = "-n")
-    })
-  }
-)
 
 # Returns a list of data frames where TRUE in file_exists column marks files that are accessible.
 # This function is used for administrative purposes to check that the flat files
@@ -299,7 +336,7 @@
 #' @importFrom rjson fromJSON
 #' @importFrom parallel mclapply detectCores
 .ISCon$methods(
-  .test_files=function(what = c("gene_expression_files", "fcs_sample_files", "protocols")){
+  .test_files = function(what = c("gene_expression_files", "fcs_sample_files", "protocols")){
     list_files <- function(link){
       response <- NULL
       if (url.exists(url = link, netrc = TRUE)){
