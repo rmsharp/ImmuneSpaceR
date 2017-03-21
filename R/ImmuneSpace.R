@@ -186,18 +186,25 @@
 
 .ISCon$methods(
   GeneExpressionInputs = function(){
-    if(!is.null(data_cache[[constants$matrix_inputs]])){
-      data_cache[[constants$matrix_inputs]]
-    }else{
-      ge <- data.table(labkey.selectRows(baseUrl = config$labkey.url.base,
+    if( .isProject() == F ){
+      if(!is.null(data_cache[[constants$matrix_inputs]])){
+        data_cache[[constants$matrix_inputs]]
+      }else{
+        ge <- tryCatch(
+          data.table(labkey.selectRows(baseUrl = config$labkey.url.base,
                                        folderPath = config$labkey.url.path,
                                        schemaName = sn_assayExprMx,
                                        queryName = qn_InputSmpls,
                                        colNameOpt = cn_fieldname,
                                        viewName = vn_exprmxs,
-                                       showHidden=TRUE))
-      setnames(ge,.self$.munge(colnames(ge)))
-      data_cache[[constants$matrix_inputs]] <<- ge
+                                       showHidden = TRUE)),
+          error = function(e) stop("GE Inputs not available for study")
+        )
+        setnames(ge, .self$.munge(colnames(ge)))
+        data_cache[[constants$matrix_inputs]] <<- ge
+      }
+    }else{
+      stop("method cannot be run at project level - select individual study")
     }
   }
 )

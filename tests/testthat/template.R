@@ -19,9 +19,9 @@ my_func <- function(foo){
 # Tests --------------------------------------------------------
 context("my context")
 
-test_that("my test"){
+test_that("my test", {
   expect_true( x == "TRUE")
-}
+})
 
 
 # cleanup ------------------------------------------------------
