@@ -49,14 +49,15 @@
 .ISCon$methods(
   checkStudy = function(verbose = FALSE){
     validStudies <- mixedsort(grep("^SDY", 
-                                   basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), value = TRUE))
+                                   basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), 
+                                   value = TRUE))
     req_study <- basename(config$labkey.url.path)
-    if(!req_study %in% c("", validStudies)){
-      if(!verbose){
+    if( !req_study %in% c("", validStudies) ){
+      if( !verbose ){
         stop(paste0(req_study, " is not a valid study"))
       } else{
         stop(paste0(req_study, " is not a valid study\nValid studies: ",
-                    paste(validStudies, collapse=", ")))
+                    paste(validStudies, collapse = ", ")))
       }
     }
   }
@@ -64,12 +65,12 @@
 
 .ISCon$methods(
   getAvailableDataSets = function(){
-    if(length(available_datasets)==0){
-      df <- labkey.selectRows(baseUrl = config$labkey.url.base
-                              , config$labkey.url.path
-                              , schemaName = sn_study
-                              , queryName =  qn_ISC)
-      available_datasets <<- data.table(df) #[,list(Label,Name,Description,`Key Property Name`)]
+    if( length(available_datasets) == 0 ){
+      df <- labkey.selectRows(baseUrl = config$labkey.url.base,
+                              folderPath = config$labkey.url.path,
+                              schemaName = sn_study,
+                              queryName =  qn_ISC)
+      available_datasets <<- data.table(df) # [,list(Label,Name,Description,`Key Property Name`)]
     }
   }
 )
@@ -105,23 +106,31 @@
 #################################################################################
 
 .ISCon$methods(
-  listDatasets=function(which = c("datasets", "expression")){
+  listDatasets = function(output = c("datasets", "expression")){
     "List the datasets available in the study or studies of the connection."
     
-    if("datasets" %in% which){
-      cat("datasets\n")
-      for(i in 1:nrow(available_datasets)){
-        cat(sprintf("\t%s\n",available_datasets[i,Name]))
+    if( !(all(output %in% c("datasets","expression"))) ){
+      stop("arguments other than 'datasets' and 'expression' not accepted")
+    }
+    
+    if( "datasets" %in% output ){
+      cat("Datasets\n")
+      for( i in 1:nrow(available_datasets) ){
+        cat(sprintf("\t%s\n", available_datasets[i,Name]))
       }
     }
-    if("expression" %in% which){
-      if(!is.null(data_cache[[constants$matrices]])){
+    
+    if( "expression" %in% output ){
+      if( !is.null(data_cache[[constants$matrices]]) ){
         cat("Expression Matrices\n")
-        for(i in 1:nrow(data_cache[[constants$matrices]])){
-          cat(sprintf("\t%s\n",data_cache[[constants$matrices]][i, name]))
+        for( i in 1:nrow(data_cache[[constants$matrices]]) ){
+          cat(sprintf("\t%s\n", data_cache[[constants$matrices]][i, name]))
         }
+      }else{
+        warning("No expression matrices available")
       }
     }
+    
   }
 )
 
@@ -130,7 +139,7 @@
 #################################################################################
 
 .ISCon$methods(
-  getGEFiles=function(files, destdir = "."){
+  getGEFiles = function(files, destdir = "."){
     "Download gene expression raw data files.\n
     files: A character. Filenames as shown on the gene_expression_files dataset.\n
     destdir: A character. The local path to store the downloaded files."

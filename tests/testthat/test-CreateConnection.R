@@ -8,12 +8,10 @@ source("set_curlOptions.R")
 # Helper Functions ---------------------------------------------
 
 try_con <- function(study){
-  result = tryCatch({
-    con <- CreateConnection(study)
-  }, error = function(e){
-    return(e)
-  })
-  return(result)
+  tryCatch(
+    con <- CreateConnection(study),
+    error = function(e) return(e)
+  )
 }
 
 
