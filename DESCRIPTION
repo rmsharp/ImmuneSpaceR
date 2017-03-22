@@ -41,6 +41,7 @@ Collate:
     'ImmuneSpace.R'
     'ImmuneSpaceR.R'
     'Schema_variables.R'
+    'getCombinedData.R'
     'getDataset.R'
     'getGEMatrix.R'
     'netrc.R'
