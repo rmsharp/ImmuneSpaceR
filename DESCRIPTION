@@ -35,7 +35,8 @@ Imports:
     heatmaply (>= 0.7.0),
     rjson,
     rmarkdown,
-    dplyr
+    dplyr,
+    hash
 Collate: 
     'CreateConnection.R'
     'ImmuneSpace.R'

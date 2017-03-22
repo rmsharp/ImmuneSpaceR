@@ -3,26 +3,26 @@
 #' @importFrom hash hash
 
 # helper functions ----------------------------------------------------
-filterGenes <- function(df, genes){
-  df <- df[ which(df[["gene_symbol"]] == genes), ]
+.filterGenes <- function(em, genes){
+  em <- em[ which(em$gene_symbol %in% genes), ]
 }
 
-hashmap <- function(hsh, input){
+.hashmap <- function(hsh, input){
   values <- unname(unlist(sapply(input, FUN = function(x){
     val <- hsh[[x]]
   })))
 }
 
-map_cols <- function(df, hsh){
-  colnames(df) <- hashmap(hsh = hsh, input = colnames(df))
+.map_cols <- function(df, hsh){
+  colnames(df) <- .hashmap(hsh = hsh, input = colnames(df))
   return(df)
 }
 
-clean_EM <- function(em, genes, id_hash, time_filt){
-  if( !is.null(genes) ){ em <- filterGenes(em, genes) }
+.clean_EM <- function(em, genes, id_hash, time_filt){
+  if( !is.null(genes) ){ em <- .filterGenes(em, genes) }
   genes_list <- em$gene_symbol
   em <- em[ , -c("gene_symbol")]
-  em <- map_cols(em, id_hash)
+  em <- .map_cols(em, id_hash)
   keep <- grep(paste0("d", time_filt), colnames(em))
   em <- em[ , keep, with = F ]
   colnames(em) <- gsub("_d.*", "", colnames(em))
@@ -30,13 +30,8 @@ clean_EM <- function(em, genes, id_hash, time_filt){
   return(em)
 }
 
-filterEM <- function(em, common_genes){
-  em[ which(em$gene_symbol %in% common_genes), ]
-}
-
 # Main Method --------------------------------------------------------
 
-# expressionSet Maker
 #' @importFrom hash hash
 .ISCon$methods(
   getCombinedData = function(clin_data, 
@@ -76,13 +71,13 @@ filterEM <- function(em, common_genes){
     subids <- paste0(pheno$`Participant ID`, "_d", pheno$`Study Time Collected`)
     subids <- gsub("-", "neg", subids, fixed = T)
     bs2id <- hash(pheno$`Biosample Accession`, subids)
-    clean_ems <- lapply(init_ems, clean_EM, genes = genes, id_hash = bs2id, time_filt = ge_time)
+    clean_ems <- lapply(init_ems, .clean_EM, genes = genes, id_hash = bs2id, time_filt = ge_time)
     
     # Ensure EMs all contain same common genes
     genes_list <- lapply(clean_ems, FUN = function(em){ em$gene_symbol })
     common_genes <- Reduce(intersect, genes_list)
     if(length(common_genes) == 0){ stop("No common genes found") }
-    filt_ems <- lapply(clean_ems, filterEM, common_genes = common_genes)
+    filt_ems <- lapply(clean_ems, .filterGenes, genes = common_genes)
     
     
     # pull clinical data with filter for subs and filter for values col
@@ -106,6 +101,10 @@ filterEM <- function(em, common_genes){
       res$EM <- Reduce(merge, filt_ems)
       res$cData <- cdata
       
+      message("----Data for single EM and cData set---")
+      message(paste0("Common Genes: ", length(common_genes)))
+      message(paste0("Number of Subjects: ", length(colnames(res$EM)) - 1))
+      
     }else if(output == "study"){
       studies <- unique(gsub(".*\\.", "", cdata$participant_id))
       res <- sapply(studies, simplify = F, USE.NAMES = T, FUN = function(sdy){
@@ -115,6 +114,11 @@ filterEM <- function(em, common_genes){
         em_nms <- paste0(em_nms, "_sum")
         em_dfs <- filt_ems[ which(names(filt_ems) %in% em_nms) ]
         tmp$EM <- Reduce(merge, em_dfs)
+        
+        message(paste0("------- Data for Study ", sdy, "--------"))
+        message(paste0("Number of EMs combined: ", length(em_dfs)))
+        message(paste0("Number of Subjects: ", length(colnames(tmp$EM)) - 1))
+        message(paste0("Number of Genes: ", dim(tmp$EM)[1]))
         return(tmp)
       })
       
@@ -125,6 +129,11 @@ filterEM <- function(em, common_genes){
         tmp <- list()
         tmp$EM <- filt_ems[[em_nm]]
         tmp$cData <- cdata[ which(cdata$participant_id %in% colnames(tmp$EM)), ]
+        
+        message(paste0("------- Data for EM: ", em_nm, "--------"))
+        message(paste0("Number of Subjects: ", length(colnames(tmp$EM)) - 1))
+        message(paste0("Number of Genes: ", dim(tmp$EM)[1]))
+        
         return(tmp)
       })
     }
