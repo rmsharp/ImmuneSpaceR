@@ -1,8 +1,24 @@
 
 # Dependencies --------------------------------------------------------
-#' @importFrom hash hash
 
 # helper functions ----------------------------------------------------
+.getEMData <- function(EM_list){
+  suppressMessages(lapply(EM_list, .self$downloadMatrix, summary = T)) 
+  init_ems <- data_cache[ -which(names(data_cache) == "GE_matrices")]
+}
+
+.getEMSubsPheno <- function(EM_list){
+  pheno <- unique(data.table(labkey.selectRows(
+    baseUrl = config$labkey.url.base, 
+    folderPath = config$labkey.url.path,
+    schemaName = sn_study, 
+    queryName = qn_InputSmplsShot,
+    containerFilter = cf_currandsubs,
+    colNameOpt = cn_caption)))
+  
+  pheno <- pheno[ which(pheno$`Expression Matrix Accession` %in% EM_list), ]
+}
+
 .filterGenes <- function(em, genes){
   em <- em[ which(em$gene_symbol %in% genes), ]
 }
@@ -104,19 +120,10 @@
     
     # Get all GE data into list of dfs and combine
     if( is.null(EM_list) ){ EM_list <- GeneExpressionMatrices()$name }
-    suppressMessages(lapply(EM_list, .self$downloadMatrix, summary = T)) 
-    init_ems <- data_cache[ -which(names(data_cache) == "GE_matrices")]
+    init_ems <- .getEMData(EM_list)
     
     # Setup biosample2subject hash
-    pheno <- unique(data.table(labkey.selectRows(
-      baseUrl = config$labkey.url.base, 
-      folderPath = config$labkey.url.path,
-      schemaName = sn_study, 
-      queryName = qn_InputSmplsShot,
-      containerFilter = cf_currandsubs,
-      colNameOpt = cn_caption)))
-    
-    pheno <- pheno[ which(pheno$`Expression Matrix Accession` %in% EM_list), ]
+    pheno <- .getEMSubsPheno(EM_list)
     subids <- paste0(pheno$`Participant ID`, "_d", pheno$`Study Time Collected`)
     subids <- gsub("-", "neg", subids, fixed = T)
     bs2id <- hash(pheno$`Biosample Accession`, subids)

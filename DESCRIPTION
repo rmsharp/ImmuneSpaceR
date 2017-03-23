@@ -36,7 +36,8 @@ Imports:
     rjson,
     rmarkdown,
     dplyr,
-    hash
+    hash,
+    magrittr
 Collate: 
     'CreateConnection.R'
     'ImmuneSpace.R'
