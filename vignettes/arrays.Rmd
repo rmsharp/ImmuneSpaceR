@@ -66,8 +66,8 @@ looking for. With `which = "expression"`, the datasets wont be printed.
 ```{r listDatasets}
 sdy269$listDatasets()
 ```
-Using `wich = "expression"`, we can remove the datasets from the output.
-```{r listDatasets-which}
+Using `output = "expression"`, we can remove the datasets from the output.
+```{r listDatasets-output}
 all$listDatasets(output = "expression")
 ```
 
