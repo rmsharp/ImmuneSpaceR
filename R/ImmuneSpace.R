@@ -4,35 +4,34 @@
 ########################################################################
 
 .ISCon$methods(
-  .munge=function(x){
+  .munge = function(x){
     new <- tolower(gsub(" ","_",basename(x)))
     idx <- which(duplicated(new) | duplicated(new, fromLast = TRUE))
-    if(length(idx)>0)
-      new[idx] <- .munge(gsub("(.*)/.*$", "\\1", x[idx]))
+    if( length(idx) > 0 ){ new[idx] <- .munge(gsub("(.*)/.*$", "\\1", x[idx])) }
     return(new)
   }
 )
 
 # Returns TRUE if the connection is at project level ("/Studies")
 .ISCon$methods(
-  .isProject=function()
+  .isProject = function()
     if(config$labkey.url.path == "/Studies/"){
       TRUE
-    } else{
+    }else{
       FALSE
     }
 )
 
 
 .ISCon$methods(
-  .isRunningLocally=function(path){
+  .isRunningLocally = function(path){
     file.exists(path)
   }
 )
 
 
 .ISCon$methods(
-  .localStudyPath=function(urlpath){
+  .localStudyPath = function(urlpath){
     LOCALPATH <- "/share/files/"
     PRODUCTION_HOST <- "www.immunespace.org"
     TEST_HOST <- "test.immunespace.org"
@@ -140,12 +139,14 @@
 
 .ISCon$methods(
   getGEFiles = function(files, destdir = "."){
-    "Download gene expression raw data files.\n
+    message("Download gene expression raw data files.\n
     files: A character. Filenames as shown on the gene_expression_files dataset.\n
-    destdir: A character. The local path to store the downloaded files."
-    links <- paste0(config$labkey.url.base, "/_webdav/",
+    destdir: A character. The local path to store the downloaded files.")
+    links <- paste0(config$labkey.url.base, 
+                    "/_webdav/",
                     config$labkey.url.path,
-                    "/%40files/rawdata/gene_expression/", files)
+                    "/%40files/rawdata/gene_expression/", 
+                    files)
     sapply(links, function(x){
       download.file(url = links[1], destfile = file.path(destdir, basename(x)),
                     method = "curl", extra = "-n")
@@ -156,12 +157,16 @@
 
 .ISCon$methods(
   listGEAnalysis = function(){
-    "List available gene expression analysis for the connection."
-    GEA <- data.table(labkey.selectRows(baseUrl = config$labkey.url.base,
-                                        folderPath = config$labkey.url.path,
-                                        schemaName = sn_geneexpr,
-                                        queryName = qn_GEanalysis,
-                                        colNameOpt = cn_rname))
+    message("List available gene expression analysis for the connection.")
+    GEA <- tryCatch(
+              data.table(labkey.selectRows(baseUrl = config$labkey.url.base,
+                                           folderPath = config$labkey.url.path,
+                                           schemaName = sn_geneexpr,
+                                           queryName = qn_GEanalysis,
+                                           colNameOpt = cn_rname)),
+              error = function(e) return(e)
+              )
+    if( length(GEA$message > 0) ){ stop("Study does not have Gene Expression Analyses") }
     return(GEA)
   }
 )
@@ -169,15 +174,19 @@
 
 .ISCon$methods(
   getGEAnalysis = function(...){
-    "Downloads data from the gene expression analysis results table.\n
-    '...': A list of arguments to be passed to labkey.selectRows."
-    GEAR <- data.table(labkey.selectRows(config$labkey.url.base, 
-                                         config$labkey.url.path,
-                                         schemaName = sn_geneexpr, 
-                                         queryName = qn_DGEAfilt,  
-                                         viewName = vn_DGEAR, 
-                                         colNameOpt = cn_caption, 
-                                         ...))
+    message("Downloads data from the gene expression analysis results table.\n
+    '...': A list of arguments to be passed to labkey.selectRows.")
+    GEAR <- tryCatch(
+              data.table(labkey.selectRows(baseUrl = config$labkey.url.base, 
+                                           folderPath = config$labkey.url.path,
+                                           schemaName = sn_geneexpr, 
+                                           queryName = qn_DGEAfilt,  
+                                           viewName = vn_DGEAR, 
+                                           colNameOpt = cn_caption, 
+                                           ...)),
+                     error = function(e) return(e)
+                    )
+    if( length(GEAR$message > 0) ){ stop("Study does not have Gene Expression Analyses") }
     setnames(GEAR, .self$.munge(colnames(GEAR)))
     return(GEAR)
   }
@@ -261,9 +270,9 @@
 }
 
 
-.getLKtbl <- function(con, schema, query){
-  df <- labkey.selectRows(baseUrl = con$config$labkey.url.base,
-                          folderPath = con$config$labkey.url.path,
+.getLKtbl <- function(config, schema, query){
+  df <- labkey.selectRows(baseUrl = config$labkey.url.base,
+                          folderPath = config$labkey.url.path,
                           schemaName = schema,
                           queryName = query,
                           showHidden = TRUE)
@@ -276,10 +285,10 @@
       stop("labkey.url.path must be /Studies/. Use CreateConnection with all studies.")
     }
     
-    pgrp <- .getLKtbl(con, schema = sn_study, query = qn_partGrp)
-    pcat <- .getLKtbl(con, schema = sn_study, query = qn_partCat)
-    pmap <- .getLKtbl(con, schema = sn_study, query = qn_partGrpMap)
-    user2grp <- .getLKtbl(con, schema = sn_core, query = qn_users)
+    pgrp <- .getLKtbl(config = .self$config, schema = sn_study, query = qn_partGrp)
+    pcat <- .getLKtbl(config = .self$config, schema = sn_study, query = qn_partCat)
+    pmap <- .getLKtbl(config = .self$config, schema = sn_study, query = qn_partGrpMap)
+    user2grp <- .getLKtbl(config = .self$config, schema = sn_core, query = qn_users)
     
     result <- merge(pgrp, pcat, by.x = pgrp_cat_id, by.y = pcat_row_id)
     result <- data.frame(Group_ID = result$`Row Id`, 
@@ -305,7 +314,7 @@
 
 .ISCon$methods(
   makeParticipantFilter = function(groupID){
-    pmap <- .getLKtbl(con, schema = sn_study, query = qn_partGrpMap)
+    pmap <- .getLKtbl(config = .self$config, schema = sn_study, query = qn_partGrpMap)
     subjects <- pmap$`Participant Id`[ which(pmap$`Group Id` == groupID)]
     if(length(subjects) == 0){ stop(paste0("No subjects found for group ID: ", groupID))}
     filter <- makeFilter(c("participant_id", "IN", paste0(subjects, collapse = ";")))
