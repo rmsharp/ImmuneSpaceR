@@ -7,14 +7,22 @@ source("set_curlOptions.R")
 
 # Connections --------------------------------------------------
 sdy269 <- CreateConnection("SDY269", verbose = TRUE)
-suppressMessages(sdy67 <- CreateConnection("SDY67"))
+sdy67 <- suppressMessages(CreateConnection("SDY67"))
 allsdy <- CreateConnection("")
 
 
 # Helper Functions ---------------------------------------------
-try_ggea <- function(con, ...){
+getFileList <- function(con){
+  gef <- con$getDataset("gene_expression_files")
+  nms <- unique(gef$name)
+  if(length(nms) > 5){ nms <- nms[1:5] }
+  return(nms)
+}
+
+try_ggef <- function(con){
+  files <- getFileList(con)
   tryCatch(
-    suppressMessages(con$getGEAnalysis(...)),
+    suppressMessages(con$getGEFiles(files = files)),
     warning = function(w) return(w),
     error = function(e) return(e)
   )
@@ -25,7 +33,7 @@ try_ggea <- function(con, ...){
 context("getGEAnalysis")
 
 test_that("returns df of GE analysis for single study if present", {
-  res <- try_ggea(sdy269)
+  res <- try_ggef(sdy269)
   expect_true( dim(res)[1] > 0 )
 })
 

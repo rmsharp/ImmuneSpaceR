@@ -143,7 +143,7 @@
     files: A character. Filenames as shown on the gene_expression_files dataset.\n
     destdir: A character. The local path to store the downloaded files.")
     links <- paste0(config$labkey.url.base, 
-                    "/_webdav/",
+                    "/_webdav",
                     config$labkey.url.path,
                     "/%40files/rawdata/gene_expression/", 
                     files)

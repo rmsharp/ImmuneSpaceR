@@ -7,7 +7,7 @@ source("set_curlOptions.R")
 
 # Connections --------------------------------------------------
 sdy269 <- CreateConnection("SDY269", verbose = TRUE)
-suppressMessages(sdy67 <- CreateConnection("SDY67", verbose = TRUE))
+sdy67 <- suppressMessages(CreateConnection("SDY67", verbose = TRUE))
 
 
 # Helper Functions ---------------------------------------------
