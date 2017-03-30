@@ -39,66 +39,6 @@
   }
 )
 
-#################################################################################
-# -----------------------  INITIALIZE METHODS ----------------------------------#
-#################################################################################
-
-#' @importFrom gtools mixedsort
-#' @importFrom dplyr summarize group_by
-.ISCon$methods(
-  checkStudy = function(verbose = FALSE){
-    validStudies <- mixedsort(grep("^SDY", 
-                                   basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), 
-                                   value = TRUE))
-    req_study <- basename(config$labkey.url.path)
-    if( !req_study %in% c("", validStudies) ){
-      if( !verbose ){
-        stop(paste0(req_study, " is not a valid study"))
-      } else{
-        stop(paste0(req_study, " is not a valid study\nValid studies: ",
-                    paste(validStudies, collapse = ", ")))
-      }
-    }
-  }
-)
-
-.ISCon$methods(
-  getAvailableDataSets = function(){
-    if( length(available_datasets) == 0 ){
-      df <- labkey.selectRows(baseUrl = config$labkey.url.base,
-                              folderPath = config$labkey.url.path,
-                              schemaName = sn_study,
-                              queryName =  qn_ISC)
-      available_datasets <<- data.table(df) # [,list(Label,Name,Description,`Key Property Name`)]
-    }
-  }
-)
-
-
-.ISCon$methods(
-  initialize=function(..., config = NULL){
-    
-    #invoke the default init routine in case it needs to be invoked 
-    #(e.g. when using $new(object) to construct the new object based on the exiting object)
-    callSuper(...)
-    
-    constants <<- list(matrices="GE_matrices", matrix_inputs="GE_inputs")
-    
-    if(!is.null(config))
-      config <<- config
-    
-    study <<- basename(config$labkey.url.path)
-    if(config$verbose){
-      checkStudy(config$verbose)
-    }
-    
-    getAvailableDataSets()
-    
-    gematrices_success <- GeneExpressionMatrices(verbose = FALSE)
-    
-  }
-)
-
 
 #################################################################################
 # -----------------------  LIST DATA METHODS -----------------------------------#
@@ -430,6 +370,66 @@
       ret$protocols <- res
     }
     return(ret)
+  }
+)
+
+#################################################################################
+# -----------------------  INITIALIZE METHODS ----------------------------------#
+#################################################################################
+
+#' @importFrom gtools mixedsort
+#' @importFrom dplyr summarize group_by
+.ISCon$methods(
+  checkStudy = function(verbose = FALSE){
+    validStudies <- mixedsort(grep("^SDY", 
+                                   basename(lsFolders(getSession(config$labkey.url.base, "Studies"))), 
+                                   value = TRUE))
+    req_study <- basename(config$labkey.url.path)
+    if( !req_study %in% c("", validStudies) ){
+      if( !verbose ){
+        stop(paste0(req_study, " is not a valid study"))
+      } else{
+        stop(paste0(req_study, " is not a valid study\nValid studies: ",
+                    paste(validStudies, collapse = ", ")))
+      }
+    }
+  }
+)
+
+.ISCon$methods(
+  getAvailableDataSets = function(){
+    if( length(available_datasets) == 0 ){
+      df <- labkey.selectRows(baseUrl = config$labkey.url.base,
+                              folderPath = config$labkey.url.path,
+                              schemaName = sn_study,
+                              queryName =  qn_ISC)
+      available_datasets <<- data.table(df) # [,list(Label,Name,Description,`Key Property Name`)]
+    }
+  }
+)
+
+
+.ISCon$methods(
+  initialize = function(..., config = NULL){
+    
+    #invoke the default init routine in case it needs to be invoked 
+    #(e.g. when using $new(object) to construct the new object based on the exiting object)
+    callSuper(...)
+    
+    constants <<- list(matrices = "GE_matrices", matrix_inputs = "GE_inputs")
+    
+    if(!is.null(config))
+      config <<- config
+    
+    study <<- basename(config$labkey.url.path)
+    if(config$verbose){
+      checkStudy(config$verbose)
+    }
+    
+    getAvailableDataSets()
+    
+    gematrices_success <- .self$GeneExpressionMatrices(verbose = FALSE)
+    
   }
 )
 
