@@ -251,14 +251,56 @@
   }
 )
 
-
+# NOTE: If more than 500 subjects, a con$getDataset() will fail with HTTP400 because 
+# the string for the colFilter = filter passed in the GET request is too long.  Need
+# to make special version of con$getDataset() to handle this?
 .ISCon$methods(
-  makeParticipantFilter = function(groupID){
-    pmap <- .getLKtbl(config = .self$config, schema = sn_study, query = qn_partGrpMap)
-    subjects <- pmap$`Participant Id`[ which(pmap$`Group Id` == groupID)]
-    if(length(subjects) == 0){ stop(paste0("No subjects found for group ID: ", groupID))}
-    filter <- makeFilter(c("participant_id", "IN", paste0(subjects, collapse = ";")))
-    return(filter)
+  getParticipantData = function(groupId, dataType){
+    allowedData <- c("hai",
+                     "neut_ab_titer",
+                     "gene_expression_files",
+                     "demographics")
+    
+    if(!(dataType %in% allowedData)){
+      stop("DataType must be in ", paste(allowedData, collapse = ", "))
+    }
+    
+    dt <- tolower(dataType)
+    sql <- paste0("SELECT ", dt, ".*, pmap.GroupId As groupId ",
+                  "FROM ", dt,
+                  " JOIN ParticipantGroupMap AS pmap ON ", 
+                  dt, ".ParticipantId = pmap.ParticipantId",
+                  " WHERE groupId = ", as.character(groupId))
+    
+    allData <- labkey.executeSql(baseUrl = .self$config$labkey.url.base, 
+                                 folderPath = .self$config$labkey.url.path,
+                                 schemaName = sn_study,
+                                 sql = sql,
+                                 colNameOpt = cn_fieldname)
+    
+    cols2rm <- c("Container", 
+                 "lsid",
+                 "ParticipantSequenceNum",
+                 "sourcelsid",
+                 "Created",
+                 "CreatedBy",
+                 "Modified",
+                 "ModifiedBy",
+                 "SequenceNum",
+                 "workspace_id",
+                 "Dataset",
+                 "VisitRowId",
+                 "Folder",
+                 "_key",
+                 "filesize",
+                 "unique_id",
+                 "QCState",
+                 "dsrowid",
+                 "date")
+    
+    filtData <- allData[ , !(colnames(allData) %in% cols2rm) ]
+    
+    return(filtData)
   }
 )
 

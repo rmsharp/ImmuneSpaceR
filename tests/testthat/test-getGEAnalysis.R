@@ -3,6 +3,7 @@
 source("global_variable.R")
 source("global_dependencies.R")
 source("set_curlOptions.R")
+library(Rlabkey)
 
 
 # Connections --------------------------------------------------
